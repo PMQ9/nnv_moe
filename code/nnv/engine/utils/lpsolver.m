@@ -60,7 +60,13 @@ function [fval, exitflag] = lpsolver(f, A, b, Aeq, Beq, lb, ub, lp_solver, opts)
         % params.OptimalityTol = 1e-09;
         % params.FeasibilityTol = 1e-09;
         result = gurobi(model, params);
-        fval = result.objval; % get fval value from results
+        % Check if objval field exists (Gurobi may not return it for infeasible problems)
+        if isfield(result, 'objval')
+            fval = result.objval; % get fval value from results
+        else
+            % If no objval, the problem is likely infeasible or had an error
+            fval = inf; % Set to inf to indicate infeasibility
+        end
         % get exitflag and match those of linprog for easier parsing
         if strcmp(result.status,'OPTIMAL')
             exitflag = "l1"; % converged to a solution
@@ -68,8 +74,15 @@ function [fval, exitflag] = lpsolver(f, A, b, Aeq, Beq, lb, ub, lp_solver, opts)
             exitflag = "l-5"; % problem is unbounded
         elseif strcmp(result.status,'ITERATION_LIMIT')
             exitflag = "l-2"; % maximum number of iterations reached
+        elseif strcmp(result.status,'INFEASIBLE')
+            exitflag = "l-2"; % no feasible point found (infeasible)
+            fval = inf; % Explicitly set fval for infeasible case
         else
+            % Handle other statuses (NUMERIC, INF_OR_UNBD, etc.)
             exitflag = "l-2"; % no feasible point found
+            if ~isfield(result, 'objval')
+                fval = inf; % Set to inf if objval not available
+            end
         end
 
     % Solve using linprog (glpk as backup)
